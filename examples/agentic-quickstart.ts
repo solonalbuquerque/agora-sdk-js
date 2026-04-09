@@ -1,25 +1,20 @@
-import { AgoraClient, createHmacAuth } from '../src/index';
+import { createHmacClient, isDirectRun, printSection } from './_shared';
 
-const client = new AgoraClient({
-  baseUrl: 'https://instance.example.com',
-  auth: createHmacAuth({
-    agentId: 'agent-123',
-    secret: 'replace-me',
-  }),
-});
-
-async function main() {
+export async function main(): Promise<void> {
+  const client = createHmacClient();
   const capabilities = await client.capabilities.list();
-  console.log(capabilities);
+  printSection('Capabilities', capabilities);
 
   const result = await client.flows.executeService({
-    actorId: 'agent-123',
-    serviceCode: 'svc.echo',
+    actorId: process.env.AGORA_AGENT_ID,
+    serviceCode: process.env.AGORA_SERVICE_CODE || 'svc.echo',
     input: { message: 'hello from AI' },
     autoRequestApproval: true,
   });
 
-  console.log(result);
+  printSection('Execution Flow Result', result);
 }
 
-void main();
+if (isDirectRun(import.meta.url)) {
+  void main();
+}
