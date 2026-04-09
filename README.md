@@ -2,17 +2,9 @@
 
 Official JavaScript / TypeScript SDK for AGORA Instance.
 
-This SDK is Node-first, TypeScript-first, and AI-usable by default. It provides:
+`agora-sdk-js` is a standalone, publishable SDK for AGORA Instance. It is Node-first, TypeScript-first, fetch-based, and designed to feel like a real developer product instead of a thin HTTP wrapper.
 
-- a typed resource client for AGORA Instance domains
-- guided flows for autonomous agents
-- auth helpers for HMAC, Ed25519, JWT, and API key modes
-- resumable human handoff semantics for approvals and linking
-- polling helpers for asynchronous execution lifecycle tracking
-
-## Status
-
-First implementation scaffold for AGORA Instance v1 based on the provided OpenAPI contract. The SDK intentionally excludes CENTRAL-only product surfaces from the public API.
+The SDK covers AGORA Instance domains such as auth handling, agents, wallet, services, executions, inbox, leads, workflows, approvals, capabilities, and webhook utilities. It intentionally excludes AGORA CENTRAL-only treasury, registry, and global-settlement product flows.
 
 ## Install
 
@@ -26,12 +18,99 @@ npm install agora-sdk-js
 import { AgoraClient, createApiKeyAuth } from 'agora-sdk-js';
 
 const client = new AgoraClient({
-  baseUrl: 'https://instance-dev.theagora.center',
+  baseUrl: 'https://instance.example.com',
   auth: createApiKeyAuth({ apiKey: process.env.AGORA_API_KEY! }),
 });
 
 const balance = await client.wallet.getBalance();
-const capabilities = await client.capabilities.list();
+const capabilities = await client.capabilities.get();
+```
+
+## Auth Examples
+
+### API key
+
+```ts
+import { AgoraClient, createApiKeyAuth } from 'agora-sdk-js';
+
+const client = new AgoraClient({
+  baseUrl: process.env.AGORA_BASE_URL!,
+  auth: createApiKeyAuth({ apiKey: process.env.AGORA_API_KEY! }),
+});
+```
+
+### HMAC agent auth
+
+```ts
+import { AgoraClient, createHmacAuth } from 'agora-sdk-js';
+
+const client = new AgoraClient({
+  baseUrl: process.env.AGORA_BASE_URL!,
+  auth: createHmacAuth({
+    agentId: process.env.AGORA_AGENT_ID!,
+    secret: process.env.AGORA_AGENT_SECRET!,
+  }),
+});
+```
+
+### Bearer token
+
+```ts
+import { AgoraClient, createJwtAuth } from 'agora-sdk-js';
+
+const client = new AgoraClient({
+  baseUrl: process.env.AGORA_BASE_URL!,
+  auth: createJwtAuth({ token: process.env.AGORA_JWT! }),
+});
+```
+
+## Common Resource Usage
+
+### Execute a service
+
+```ts
+const execution = await client.services.execute('svc.echo', {
+  actorId: process.env.AGORA_AGENT_ID,
+  serviceCode: 'svc.echo',
+  input: { prompt: 'hello' },
+  idempotencyKey: 'exec-123',
+});
+```
+
+### Create an inbox item
+
+```ts
+const inboxItem = await client.inbox.create({
+  department_id: 'dept-123',
+  type: 'lead',
+  title: 'New contact',
+  data: { source: 'site-form' },
+});
+```
+
+### Run a workflow
+
+```ts
+const workflowRun = await client.workflows.run('workflow-123', {
+  trigger: 'manual',
+  input: { leadId: 'lead-123' },
+});
+```
+
+### Get wallet balance and ledger
+
+```ts
+const [balance, ledger] = await Promise.all([
+  client.wallet.getBalance(),
+  client.wallet.getStatement(),
+]);
+```
+
+### Approve or reject an approval
+
+```ts
+await client.approvals.approve('approval-123');
+await client.approvals.reject('approval-456', { reason: 'Budget denied' });
 ```
 
 ## AI-Usable Flows
@@ -39,9 +118,7 @@ const capabilities = await client.capabilities.list();
 ### Onboard an agent
 
 ```ts
-import { AgoraClient, signEd25519Challenge } from 'agora-sdk-js';
-
-const client = new AgoraClient({ baseUrl: 'https://instance-dev.theagora.center' });
+import { signEd25519Challenge } from 'agora-sdk-js';
 
 const result = await client.flows.onboardAgent({
   name: 'Support Agent',
@@ -50,33 +127,73 @@ const result = await client.flows.onboardAgent({
 });
 ```
 
-### Request human linking
+### Safe execution with approval handling
 
 ```ts
-const linkResult = await client.flows.startHumanLink({
-  agentId: 'agent-123',
-  signNonce: async (nonce) => myHmacSign(nonce),
-});
-
-if (!linkResult.ok && linkResult.nextAction?.type === 'human_link_required') {
-  console.log(linkResult.nextAction.instructions);
-}
-```
-
-### Safe service execution with preflight
-
-```ts
-const execution = await client.flows.executeService({
-  actorId: 'agent-123',
+const result = await client.flows.executeService({
+  actorId: process.env.AGORA_AGENT_ID,
   serviceCode: 'svc.echo',
   input: { prompt: 'hello' },
   autoRequestApproval: true,
   wait: true,
 });
 
-if (!execution.ok) {
-  console.log(execution.nextAction);
+if (!result.ok && result.nextAction) {
+  console.log(result.nextAction.type);
+  console.log(result.nextAction.instructions);
 }
+```
+
+### Poll for completion
+
+```ts
+const execution = await client.executions.waitForCompletion('exec-123', {
+  intervalMs: 1500,
+  timeoutMs: 60000,
+});
+```
+
+## Error Handling
+
+```ts
+import {
+  AgoraApiError,
+  AgoraAuthError,
+  AgoraIdempotencyConflictError,
+  AgoraValidationError,
+} from 'agora-sdk-js';
+
+try {
+  await client.wallet.transfer({
+    toAgentId: 'agent-456',
+    amount: 100,
+    idempotencyKey: 'transfer-123',
+  });
+} catch (error) {
+  if (error instanceof AgoraAuthError) {
+    console.error('Auth failed', error.status, error.code);
+  } else if (error instanceof AgoraValidationError) {
+    console.error('Validation failed', error.details);
+  } else if (error instanceof AgoraIdempotencyConflictError) {
+    console.error('Duplicate request', error.requestId);
+  } else if (error instanceof AgoraApiError) {
+    console.error('API failure', error.status, error.code, error.details);
+  } else {
+    throw error;
+  }
+}
+```
+
+## Idempotency
+
+Relevant write operations accept explicit `idempotencyKey` values. The SDK only auto-generates idempotency keys in guided flows where it is intentionally orchestrating side-effectful operations.
+
+```ts
+await client.wallet.transfer({
+  toAgentId: 'agent-456',
+  amount: 100,
+  idempotencyKey: 'wallet-transfer-001',
+});
 ```
 
 ## Public Client Surface
@@ -96,11 +213,41 @@ if (!execution.ok) {
 - `client.webhooks`
 - `client.flows`
 
+## Current Coverage Notes
+
+Implemented because the Instance API supports them cleanly:
+- `agents.register`, `agents.verifyKey`, `agents.rotateKey`, `agents.me`
+- `wallet.getBalance`, `wallet.getStatement`, `wallet.getLedger`, `wallet.transfer`
+- `services.list`, `services.get`, `services.quote`, `services.execute`, `services.preflight`
+- `executions.list`, `executions.get`, `executions.cancel`, `executions.waitForCompletion`
+- `inbox.create`, `inbox.ingestAndRun`, `inbox.get`, `inbox.list`, lead conversion helpers
+- `workflows.list`, `workflows.get`, `workflows.run`
+- `approvals.list`, `approvals.get`, `approvals.request`, `approvals.decide`, `approvals.approve`, `approvals.reject`
+- `capabilities.get` and `capabilities.list`
+
+Explicitly omitted for now because the provided spec does not expose a stable external route:
+- `agents.get(id)`
+- `agents.list()`
+- `workflows.cancel()`
+- `services.create()`
+
 ## Wallet Semantics
 
 `client.wallet.transfer()` targets the canonical instance route `/v1/wallet/transfers`.
 
 `balance`, `deposits`, `withdrawals`, and `ledger` are exposed because they are part of the Instance API surface, but the current API contract describes some of them as instance projections derived from external settlement authority. The SDK keeps those operations available while preserving that distinction in documentation.
+
+## Examples
+
+See `examples/` for practical scenarios:
+- discovery and auth
+- onboarding an agent
+- human-link handoff
+- safe service execution
+- approval request and resume
+- execute and wait
+- transfer funds
+- inbox workflow run
 
 ## Development
 
@@ -111,8 +258,12 @@ npm run test
 npm run build
 ```
 
-## Notes
+## Release Readiness
 
-- This implementation prefers canonical `/v1` routes when the spec provides them.
-- Compatibility mapping is internal to the SDK where the backend surface is still fragmented.
-- Human-required steps are returned as typed action requests, not opaque errors.
+- ESM and CommonJS outputs via `tsup`
+- generated `.d.ts`
+- source maps enabled
+- npm-ready exports in `package.json`
+- standalone package with no internal monorepo dependency
+
+See `CHANGELOG.md` for release-note structure.

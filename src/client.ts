@@ -14,7 +14,7 @@ import {
   WalletResource,
   WebhooksResource,
   WorkflowsResource,
-} from './resources';
+} from './resources/index';
 import { AgoraFlows } from './flows';
 
 export class AgoraClient {

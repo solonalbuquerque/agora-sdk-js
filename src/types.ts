@@ -8,6 +8,49 @@ export type Dictionary<T = unknown> = Record<string, T>;
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 export type AuthMode = 'none' | 'hmac' | 'ed25519' | 'jwt' | 'apiKey';
 
+export enum ExecutionStatus {
+  Pending = 'pending',
+  Running = 'running',
+  AwaitingCallback = 'awaiting_callback',
+  Completed = 'completed',
+  Succeeded = 'succeeded',
+  Success = 'success',
+  Failed = 'failed',
+  Rejected = 'rejected',
+  Denied = 'denied',
+  Cancelled = 'cancelled',
+  Canceled = 'canceled',
+  Expired = 'expired',
+}
+
+export enum ApprovalStatus {
+  Pending = 'pending',
+  Approved = 'approved',
+  Rejected = 'rejected',
+  Denied = 'denied',
+  Expired = 'expired',
+}
+
+export enum WorkflowRunStatus {
+  Pending = 'pending',
+  Running = 'running',
+  Completed = 'completed',
+  Failed = 'failed',
+  Cancelled = 'cancelled',
+  Canceled = 'canceled',
+  Expired = 'expired',
+}
+
+export enum InboxStatus {
+  New = 'new',
+  Open = 'open',
+  Pending = 'pending',
+  Running = 'running',
+  Completed = 'completed',
+  Failed = 'failed',
+  Archived = 'archived',
+}
+
 export interface AgoraClientOptions {
   baseUrl: string;
   auth?: AuthProvider;
@@ -84,6 +127,14 @@ export interface AgoraResponseEnvelope<T> {
   data?: T;
   code?: string;
   message?: string;
+  [key: string]: unknown;
+}
+
+export interface AgoraApiErrorEnvelope {
+  ok?: boolean;
+  code?: string;
+  message?: string;
+  errors?: Array<{ field?: string; message?: string; code?: string }>;
   [key: string]: unknown;
 }
 
@@ -167,6 +218,14 @@ export interface VerifiedAgentKey {
   [key: string]: unknown;
 }
 
+export interface RotateAgentKeyResult {
+  challenge_id?: string;
+  challenge?: string;
+  expires_at?: string;
+  verify_key_endpoint?: string;
+  [key: string]: unknown;
+}
+
 export interface ServiceSummary {
   id?: string;
   code?: string;
@@ -175,6 +234,12 @@ export interface ServiceSummary {
   category?: string;
   price?: number;
   status?: string;
+  [key: string]: unknown;
+}
+
+export interface ServiceQuote {
+  amount_ago_cents?: number;
+  expires_at?: string;
   [key: string]: unknown;
 }
 
@@ -209,7 +274,7 @@ export interface ServiceExecutionInput extends ExecutionPreflightInput {
 export interface Execution {
   id?: string;
   executionId?: string;
-  status?: string;
+  status?: ExecutionStatus | string;
   serviceCode?: string;
   result?: unknown;
   error?: unknown;
@@ -227,7 +292,7 @@ export interface WorkflowContext {
 export interface WorkflowRun {
   id?: string;
   runUuid?: string;
-  status?: string;
+  status?: WorkflowRunStatus | string;
   workflowId?: string;
   [key: string]: unknown;
 }
@@ -238,7 +303,7 @@ export interface InboxItem {
   department_id?: string;
   type?: string;
   title?: string;
-  status?: string;
+  status?: InboxStatus | string;
   contact?: {
     name?: string;
     email?: string;
@@ -259,7 +324,7 @@ export interface CreateInboxItemInput {
 export interface Approval {
   id?: string;
   approvalId?: string;
-  status?: string;
+  status?: ApprovalStatus | string;
   amount_ago_cents?: number;
   expires_at?: string | null;
   [key: string]: unknown;
@@ -397,7 +462,7 @@ export interface ExecuteServiceFlowInput extends ServiceExecutionInput {
 
 export interface ApprovalRequestSummary {
   approvalId: string;
-  status?: string;
+  status?: ApprovalStatus | string;
   amountAgoCents?: number;
   expiresAt?: string | null;
 }

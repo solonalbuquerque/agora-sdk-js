@@ -165,7 +165,7 @@ export class AgoraFlows {
         amountAgoCents: preflight.estimatedCostCents,
         correlationId: input.correlationId,
         workflowContext: input.workflowContext,
-      });
+      }, { idempotencyKey });
 
       return {
         ok: false,
@@ -204,7 +204,7 @@ export class AgoraFlows {
     }
 
     const executionId = String(execution.executionId ?? execution.id ?? '');
-    const settled = await this.waitForExecution(executionId, input.polling);
+    const settled = await this.client.executions.waitForCompletion(executionId, input.polling);
     return {
       ok: true,
       data: { execution: settled },
@@ -224,7 +224,7 @@ export class AgoraFlows {
       correlationId: input.correlationId,
       workflowContext: input.workflowContext,
       agentMessage: preflight.reason ?? 'Approval requested by AI flow.',
-    });
+    }, { idempotencyKey: ensureIdempotencyKey() });
     return {
       ok: true,
       data: approvalSummary(approval),
@@ -242,10 +242,10 @@ export class AgoraFlows {
     };
   }
 
-  async runWorkflowFromInbox(input: RunWorkflowFromInboxInput): Promise<FlowResult<{ inbox: unknown; workflowRun?: WorkflowRun }>> {
-    const inbox = input.createInbox
+  async runWorkflowFromInbox(input: RunWorkflowFromInboxInput): Promise<FlowResult<{ inbox: Record<string, unknown>; workflowRun?: WorkflowRun }>> {
+    const inbox = (input.createInbox
       ? (input.runOther ? await this.client.inbox.ingestAndRun(input.createInbox) : await this.client.inbox.create(input.createInbox))
-      : await this.client.inbox.get(String(input.inboxItemId));
+      : await this.client.inbox.get(String(input.inboxItemId))) as Record<string, unknown>;
 
     if (input.runOther && input.workflowId && (inbox.id ?? inbox.itemId)) {
       const workflowRun = await this.client.inbox.run(String(inbox.id ?? inbox.itemId), { workflowId: input.workflowId });
@@ -261,11 +261,7 @@ export class AgoraFlows {
   }
 
   async waitForExecution(executionId: string, options?: PollingOptions): Promise<Execution> {
-    return poll(
-      () => this.client.executions.get(executionId),
-      (execution) => isTerminalStatus(execution.status),
-      options,
-    );
+    return this.client.executions.waitForCompletion(executionId, options);
   }
 
   async waitForApprovalDecision(approvalId: string, options?: PollingOptions): Promise<Approval> {

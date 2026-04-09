@@ -14,14 +14,21 @@ export class AgoraError extends Error {
   }
 }
 
-export class AgoraAuthError extends AgoraError {
+export class AgoraApiError extends AgoraError {
+  constructor(message: string, options: ConstructorParameters<typeof AgoraError>[1] = {}) {
+    super(message, options);
+    this.name = 'AgoraApiError';
+  }
+}
+
+export class AgoraAuthError extends AgoraApiError {
   constructor(message: string, options: ConstructorParameters<typeof AgoraError>[1] = {}) {
     super(message, options);
     this.name = 'AgoraAuthError';
   }
 }
 
-export class AgoraRateLimitError extends AgoraError {
+export class AgoraRateLimitError extends AgoraApiError {
   readonly retryAfter?: string | null;
 
   constructor(message: string, options: ConstructorParameters<typeof AgoraError>[1] & { retryAfter?: string | null } = {}) {
@@ -31,10 +38,17 @@ export class AgoraRateLimitError extends AgoraError {
   }
 }
 
-export class AgoraValidationError extends AgoraError {
+export class AgoraValidationError extends AgoraApiError {
   constructor(message: string, options: ConstructorParameters<typeof AgoraError>[1] = {}) {
     super(message, options);
     this.name = 'AgoraValidationError';
+  }
+}
+
+export class AgoraIdempotencyConflictError extends AgoraApiError {
+  constructor(message: string, options: ConstructorParameters<typeof AgoraError>[1] = {}) {
+    super(message, options);
+    this.name = 'AgoraIdempotencyConflictError';
   }
 }
 

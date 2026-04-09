@@ -17,6 +17,15 @@ function bodyDigest(body: RequestContext['body']): string {
   return body === undefined ? '' : JSON.stringify(body);
 }
 
+function assertNonEmptyString(value: string | Uint8Array, label: string): void {
+  if (typeof value === 'string' && value.trim().length === 0) {
+    throw new AgoraAuthError(`${label} must not be empty`);
+  }
+  if (value instanceof Uint8Array && value.length === 0) {
+    throw new AgoraAuthError(`${label} must not be empty`);
+  }
+}
+
 function decodeKeyMaterial(value: string | Uint8Array): Buffer {
   if (value instanceof Uint8Array) return Buffer.from(value);
   return Buffer.from(value);
@@ -24,20 +33,30 @@ function decodeKeyMaterial(value: string | Uint8Array): Buffer {
 
 export class JwtAuthProvider implements AuthProvider {
   readonly mode = 'jwt' as const;
-  constructor(private readonly config: JwtAuthConfig) {}
+  constructor(private readonly config: JwtAuthConfig) {
+    if (typeof config.token === 'string' && config.token.trim().length === 0) {
+      throw new AgoraAuthError('JWT token must not be empty');
+    }
+  }
 
   async apply(context: RequestContext): Promise<void> {
     const token = await resolveValue(this.config.token);
+    if (!token || token.trim().length === 0) throw new AgoraAuthError('JWT token must not be empty');
     context.headers.set('Authorization', `Bearer ${token}`);
   }
 }
 
 export class ApiKeyAuthProvider implements AuthProvider {
   readonly mode = 'apiKey' as const;
-  constructor(private readonly config: ApiKeyAuthConfig) {}
+  constructor(private readonly config: ApiKeyAuthConfig) {
+    if (typeof config.apiKey === 'string' && config.apiKey.trim().length === 0) {
+      throw new AgoraAuthError('API key must not be empty');
+    }
+  }
 
   async apply(context: RequestContext): Promise<void> {
     const apiKey = await resolveValue(this.config.apiKey);
+    if (!apiKey || apiKey.trim().length === 0) throw new AgoraAuthError('API key must not be empty');
     const headerName = this.config.headerName ?? 'X-API-KEY';
     const prefix = this.config.prefix ? `${this.config.prefix} ` : '';
     context.headers.set(headerName, `${prefix}${apiKey}`);
@@ -46,7 +65,10 @@ export class ApiKeyAuthProvider implements AuthProvider {
 
 export class HmacAuthProvider implements AuthProvider {
   readonly mode = 'hmac' as const;
-  constructor(private readonly config: HmacAuthConfig) {}
+  constructor(private readonly config: HmacAuthConfig) {
+    if (!config.agentId || config.agentId.trim().length === 0) throw new AgoraAuthError('HMAC agentId must not be empty');
+    assertNonEmptyString(config.secret, 'HMAC secret');
+  }
 
   apply(context: RequestContext): void {
     const timestampHeader = this.config.timestampHeader ?? 'X-Timestamp';
@@ -65,7 +87,10 @@ export class HmacAuthProvider implements AuthProvider {
 
 export class Ed25519AuthProvider implements AuthProvider {
   readonly mode = 'ed25519' as const;
-  constructor(private readonly config: Ed25519AuthConfig) {}
+  constructor(private readonly config: Ed25519AuthConfig) {
+    assertNonEmptyString(config.privateKey, 'Ed25519 private key');
+    normalizePrivateKey(config.privateKey);
+  }
 
   apply(context: RequestContext): void {
     const timestampHeader = this.config.timestampHeader ?? 'x-agora-timestamp';

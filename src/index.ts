@@ -11,6 +11,14 @@ export {
   JwtAuthProvider,
 } from './core/auth';
 export { HttpClient } from './core/http';
-export { AgoraError, AgoraAuthError, AgoraRateLimitError, AgoraTimeoutError, AgoraValidationError } from './core/errors';
+export {
+  AgoraError,
+  AgoraApiError,
+  AgoraAuthError,
+  AgoraIdempotencyConflictError,
+  AgoraRateLimitError,
+  AgoraTimeoutError,
+  AgoraValidationError,
+} from './core/errors';
 export { verifyWebhookSignature } from './core/utils';
 export type * from './types';

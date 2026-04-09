@@ -1,4 +1,5 @@
 import type {
+  AgoraApiErrorEnvelope,
   AgoraClientOptions,
   AgoraResponseEnvelope,
   AuthProvider,
@@ -7,7 +8,15 @@ import type {
   RequestContext,
   RequestOptions,
 } from '../types';
-import { AgoraAuthError, AgoraError, AgoraRateLimitError, AgoraTimeoutError, AgoraValidationError } from './errors';
+import {
+  AgoraApiError,
+  AgoraAuthError,
+  AgoraError,
+  AgoraIdempotencyConflictError,
+  AgoraRateLimitError,
+  AgoraTimeoutError,
+  AgoraValidationError,
+} from './errors';
 import { buildUrl, computeBackoff, serializeBody } from './utils';
 
 export class HttpClient {
@@ -30,7 +39,7 @@ export class HttpClient {
       retries: options.retry?.retries ?? 2,
       baseDelayMs: options.retry?.baseDelayMs ?? 250,
       maxDelayMs: options.retry?.maxDelayMs ?? 2_000,
-      retryOnStatuses: options.retry?.retryOnStatuses ?? [408, 409, 425, 429, 500, 502, 503, 504],
+      retryOnStatuses: options.retry?.retryOnStatuses ?? [408, 425, 429, 500, 502, 503, 504],
     };
   }
 
@@ -38,6 +47,7 @@ export class HttpClient {
     const url = buildUrl(this.baseUrl, path, options.query);
     const auth = options.auth ?? this.auth;
     const timeoutMs = options.timeoutMs ?? this.timeoutMs;
+    const serializedBody = serializeBody(body);
     let lastError: unknown;
 
     for (let attempt = 0; attempt <= this.retry.retries; attempt += 1) {
@@ -60,7 +70,7 @@ export class HttpClient {
         const response = await this.fetchImpl(url, {
           method,
           headers,
-          body: serializeBody(body),
+          body: serializedBody,
           signal: abortController.signal,
         });
         return await parseResponse<T>(response, options.responseType ?? 'json');
@@ -69,9 +79,9 @@ export class HttpClient {
         if (abortController.signal.aborted && !options.signal?.aborted) {
           throw new AgoraTimeoutError(`Request timeout after ${timeoutMs}ms`, { cause: error });
         }
-        if (attempt >= this.retry.retries) throw normalizeFetchError(error);
-        const status = extractStatus(error);
-        if (status !== undefined && !this.retry.retryOnStatuses.includes(status)) throw normalizeFetchError(error);
+        if (!shouldRetry(method, options.idempotencyKey, error, attempt, this.retry)) {
+          throw normalizeFetchError(error);
+        }
         const delay = computeBackoff(attempt, this.retry.baseDelayMs, this.retry.maxDelayMs);
         await new Promise((resolve) => setTimeout(resolve, delay));
       } finally {
@@ -112,17 +122,34 @@ async function parseResponse<T>(response: Response, responseType: RequestOptions
   const payload = isJson ? await response.json() : await response.text();
 
   if (!response.ok) {
-    const envelope = payload as AgoraResponseEnvelope<unknown>;
+    const envelope = (isJson ? payload : { message: String(payload) }) as AgoraResponseEnvelope<unknown> & AgoraApiErrorEnvelope;
     const message = envelope?.message ?? response.statusText ?? 'AGORA request failed';
-    const options = { status: response.status, code: envelope?.code, requestId, details: payload };
-    if (response.status === 401 || response.status === 403) throw new AgoraAuthError(message, options);
-    if (response.status === 429) throw new AgoraRateLimitError(message, { ...options, retryAfter: response.headers.get('retry-after') });
-    if (response.status === 400 || response.status === 422) throw new AgoraValidationError(message, options);
-    throw new AgoraError(message, options);
+    const baseOptions = { status: response.status, code: envelope?.code, requestId, details: payload };
+
+    if (response.status === 401 || response.status === 403) throw new AgoraAuthError(message, baseOptions);
+    if (response.status === 409) throw new AgoraIdempotencyConflictError(message, baseOptions);
+    if (response.status === 429) throw new AgoraRateLimitError(message, { ...baseOptions, retryAfter: response.headers.get('retry-after') });
+    if (response.status === 400 || response.status === 422) throw new AgoraValidationError(message, baseOptions);
+    throw new AgoraApiError(message, baseOptions);
   }
 
   if (responseType === 'text') return payload as T;
   return payload as T;
+}
+
+function shouldRetry(
+  method: HttpMethod,
+  idempotencyKey: string | undefined,
+  error: unknown,
+  attempt: number,
+  retry: Required<NonNullable<AgoraClientOptions['retry']>>,
+): boolean {
+  if (attempt >= retry.retries) return false;
+  const safeMethod = method === 'GET';
+  const idempotentWrite = method !== 'GET' && Boolean(idempotencyKey);
+  if (!safeMethod && !idempotentWrite) return false;
+  const status = extractStatus(error);
+  return status === undefined || retry.retryOnStatuses.includes(status);
 }
 
 function normalizeFetchError(error: unknown): Error {
