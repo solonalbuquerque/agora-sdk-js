@@ -6,7 +6,7 @@ function createContext() {
     method: 'POST' as const,
     path: '/api/external/executions',
     url: new URL('https://instance.example.com/api/external/executions'),
-    body: { serviceCode: 'svc.echo', input: { hello: 'world' } },
+    body: { capabilityCode: 'svc.echo', serviceCode: 'svc.echo', input: { hello: 'world' } },
     headers: new Headers(),
     options: {},
   };

@@ -7,46 +7,38 @@ import type {
   ServiceQuote,
   ServiceSummary,
 } from '../types';
-import { toArrayResult, unwrapData } from '../core/utils';
+import { HttpClient } from '../core/http';
 import { BaseResource } from './base';
+import { CapabilitiesResource } from './capabilities';
 
+/**
+ * @deprecated Use CapabilitiesResource instead.
+ */
 export class ServicesResource extends BaseResource {
+  private readonly capabilities: CapabilitiesResource;
+
+  constructor(http: HttpClient) {
+    super(http);
+    this.capabilities = new CapabilitiesResource(http);
+  }
+
   async list(query?: Record<string, string | number | boolean | null | undefined>, options?: RequestOptions): Promise<ServiceSummary[]> {
-    return toArrayResult(await this.http.get('/api/services/', { ...options, query }));
+    return this.capabilities.list(query, options) as Promise<ServiceSummary[]>;
   }
 
   async get(serviceCode: string, options?: RequestOptions): Promise<ServiceSummary> {
-    return unwrapData(await this.http.get(`/api/services/${serviceCode}`, options));
+    return this.capabilities.get(serviceCode, options) as Promise<ServiceSummary>;
   }
 
   async quote(input: ExecutionPreflightInput, options?: RequestOptions): Promise<ServiceQuote> {
-    return unwrapData(await this.http.post('/quote', {
-      actorId: input.actorId,
-      serviceCode: input.serviceCode,
-      input: input.input,
-      correlationId: input.correlationId,
-      workflowContext: input.workflowContext,
-    }, options));
+    return this.capabilities.quote(input, options) as Promise<ServiceQuote>;
   }
 
   async execute(id: string, input: ServiceExecutionInput, options?: RequestOptions): Promise<Execution> {
-    const payload = {
-      actorId: input.actorId,
-      serviceCode: input.serviceCode,
-      input: input.input,
-      approvalMode: input.approvalMode,
-      budgetLimitAgo: input.budgetLimitAgo,
-      correlationId: input.correlationId,
-      idempotencyKey: input.idempotencyKey,
-      workflowContext: input.workflowContext,
-      callbackUrl: input.callbackUrl,
-      callbackSecret: input.callbackSecret,
-      requestedExecutionMode: input.requestedExecutionMode,
-    };
-    return unwrapData(await this.http.post(`/v1/services/${id}/execute`, payload, options));
+    return this.capabilities.execute(id, input, options);
   }
 
   async preflight(input: ExecutionPreflightInput, options?: RequestOptions): Promise<ExecutionPreflight> {
-    return unwrapData(await this.http.post('/api/external/preflight', input, options));
+    return this.capabilities.preflight(input, options);
   }
 }

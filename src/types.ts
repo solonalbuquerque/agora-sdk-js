@@ -172,10 +172,44 @@ export interface AuthModesInfo {
 export interface Capability {
   id?: string;
   code?: string;
+  capabilityCode?: string;
+  /**
+   * @deprecated Use capabilityCode instead.
+   */
+  serviceCode?: string;
   name?: string;
   category?: string;
   description?: string;
   [key: string]: unknown;
+}
+
+export interface CapabilitySummary extends Capability {
+  price?: number;
+  status?: string;
+}
+
+/**
+ * @deprecated Use CapabilitySummary instead.
+ */
+export interface ServiceSummary extends CapabilitySummary {}
+
+export interface CapabilityQuote {
+  amount_ago_cents?: number;
+  expires_at?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * @deprecated Use CapabilityQuote instead.
+ */
+export interface ServiceQuote extends CapabilityQuote {}
+
+export interface CapabilityReference {
+  capabilityCode?: string;
+  /**
+   * @deprecated Use capabilityCode instead.
+   */
+  serviceCode?: string;
 }
 
 export interface Agent {
@@ -226,32 +260,19 @@ export interface RotateAgentKeyResult {
   [key: string]: unknown;
 }
 
-export interface ServiceSummary {
-  id?: string;
-  code?: string;
-  serviceCode?: string;
-  name?: string;
-  category?: string;
-  price?: number;
-  status?: string;
-  [key: string]: unknown;
-}
-
-export interface ServiceQuote {
-  amount_ago_cents?: number;
-  expires_at?: string;
-  [key: string]: unknown;
-}
-
-export interface ExecutionPreflightInput {
+export interface CapabilityPreflightInput extends CapabilityReference {
   actorId?: string;
-  serviceCode: string;
   input?: JsonObject;
   approvalMode?: 'auto' | 'require' | 'skip';
   budgetLimitAgo?: number;
   correlationId?: string;
   workflowContext?: WorkflowContext;
 }
+
+/**
+ * @deprecated Use CapabilityPreflightInput instead.
+ */
+export interface ExecutionPreflightInput extends CapabilityPreflightInput {}
 
 export interface ExecutionPreflight {
   allowed: boolean;
@@ -264,17 +285,26 @@ export interface ExecutionPreflight {
   [key: string]: unknown;
 }
 
-export interface ServiceExecutionInput extends ExecutionPreflightInput {
+export interface CapabilityExecutionInput extends CapabilityPreflightInput {
   idempotencyKey?: string;
   callbackUrl?: string;
   callbackSecret?: string;
   requestedExecutionMode?: string;
 }
 
+/**
+ * @deprecated Use CapabilityExecutionInput instead.
+ */
+export interface ServiceExecutionInput extends CapabilityExecutionInput {}
+
 export interface Execution {
   id?: string;
   executionId?: string;
   status?: ExecutionStatus | string;
+  capabilityCode?: string;
+  /**
+   * @deprecated Use capabilityCode instead.
+   */
   serviceCode?: string;
   result?: unknown;
   error?: unknown;
@@ -335,9 +365,8 @@ export interface ApprovalDecisionInput {
   decisionPayload?: JsonObject;
 }
 
-export interface ApprovalRequestInput {
+export interface ApprovalRequestInput extends CapabilityReference {
   actorId?: string;
-  serviceCode: string;
   input?: JsonObject;
   callbackUrl?: string;
   callbackSecret?: string;
@@ -454,11 +483,16 @@ export interface HumanLinkRequestContext extends Dictionary {
   signature: string;
 }
 
-export interface ExecuteServiceFlowInput extends ServiceExecutionInput {
+export interface ExecuteCapabilityFlowInput extends CapabilityExecutionInput {
   autoRequestApproval?: boolean;
   wait?: boolean;
   polling?: PollingOptions;
 }
+
+/**
+ * @deprecated Use ExecuteCapabilityFlowInput instead.
+ */
+export interface ExecuteServiceFlowInput extends ExecuteCapabilityFlowInput {}
 
 export interface ApprovalRequestSummary {
   approvalId: string;

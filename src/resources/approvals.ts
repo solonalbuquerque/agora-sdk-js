@@ -2,6 +2,10 @@ import type { Approval, ApprovalDecisionInput, ApprovalRequestInput, RequestOpti
 import { toArrayResult, unwrapData } from '../core/utils';
 import { BaseResource } from './base';
 
+function resolveCapabilityCode(input: { capabilityCode?: string; serviceCode?: string }): string {
+  return String(input.capabilityCode ?? input.serviceCode ?? '');
+}
+
 export class ApprovalsResource extends BaseResource {
   async list(query?: Record<string, string | number | boolean | null | undefined>, options?: RequestOptions): Promise<Approval[]> {
     return toArrayResult(await this.http.get('/api/external/approvals', { ...options, query }));
@@ -14,7 +18,7 @@ export class ApprovalsResource extends BaseResource {
   async request(input: ApprovalRequestInput, options?: RequestOptions): Promise<Approval> {
     return unwrapData(await this.http.post('/api/external/approvals/request', {
       actorId: input.actorId,
-      serviceCode: input.serviceCode,
+      serviceCode: resolveCapabilityCode(input),
       input: input.input,
       callbackUrl: input.callbackUrl,
       callbackSecret: input.callbackSecret,

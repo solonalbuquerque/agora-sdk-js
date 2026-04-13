@@ -1,11 +1,11 @@
-import type { ExecuteServiceFlowInput } from '../src/index';
+import type { ExecuteCapabilityFlowInput } from '../src/index';
 import { createHmacClient, isDirectRun, printPendingAction, printSection, requireEnv } from './_shared';
 
 export async function main(): Promise<void> {
   const client = createHmacClient();
-  const request: ExecuteServiceFlowInput = {
+  const request: ExecuteCapabilityFlowInput = {
     actorId: requireEnv('AGORA_AGENT_ID'),
-    serviceCode: requireEnv('AGORA_SERVICE_CODE'),
+    capabilityCode: requireEnv('AGORA_CAPABILITY_CODE', 'AGORA_SERVICE_CODE'),
     input: {
       prompt: 'Request approval and resume the flow after a human decision.',
       requestedAt: new Date().toISOString(),
@@ -37,7 +37,7 @@ export async function main(): Promise<void> {
   printSection('Resume Result', resumeResult);
 
   if (String(decided.status).toLowerCase() === 'approved') {
-    const execution = await client.flows.executeService({
+    const execution = await client.flows.executeCapability({
       ...request,
       autoRequestApproval: false,
       wait: true,

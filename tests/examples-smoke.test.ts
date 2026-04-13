@@ -5,7 +5,7 @@ const modules = [
   '../examples/discovery-and-auth.ts',
   '../examples/onboard-agent.ts',
   '../examples/start-human-link.ts',
-  '../examples/execute-service-safe.ts',
+  '../examples/execute-capability-safe.ts',
   '../examples/request-approval-and-resume.ts',
   '../examples/execute-and-wait.ts',
   '../examples/transfer-funds.ts',

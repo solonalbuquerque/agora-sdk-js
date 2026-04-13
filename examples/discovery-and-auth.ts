@@ -7,7 +7,7 @@ export async function main(): Promise<void> {
     client.instance.getManifest(),
     client.instance.getInfo(),
     client.auth.getModes(),
-    client.capabilities.list(),
+    client.capabilities.discover(),
   ]);
 
   printSection('Instance Manifest', manifest);

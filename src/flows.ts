@@ -2,6 +2,7 @@ import type {
   Agent,
   Approval,
   ApprovalRequestSummary,
+  ExecuteCapabilityFlowInput,
   ExecuteServiceFlowInput,
   Execution,
   FlowResult,
@@ -26,6 +27,14 @@ function approvalSummary(approval: Approval): ApprovalRequestSummary {
     amountAgoCents: approval.amount_ago_cents,
     expiresAt: approval.expires_at ?? null,
   };
+}
+
+function resolveCapabilityCode(input: { capabilityCode?: string; serviceCode?: string }): string {
+  return String(input.capabilityCode ?? input.serviceCode ?? '');
+}
+
+function normalizeExecution(execution: Execution, capabilityCode: string): Execution {
+  return capabilityCode && !execution.capabilityCode ? { ...execution, capabilityCode } : execution;
 }
 
 export class AgoraFlows {
@@ -87,11 +96,12 @@ export class AgoraFlows {
     };
   }
 
-  async executeService(input: ExecuteServiceFlowInput): Promise<FlowResult<{ execution?: Execution; approval?: ApprovalRequestSummary }>> {
+  async executeCapability(input: ExecuteCapabilityFlowInput): Promise<FlowResult<{ execution?: Execution; approval?: ApprovalRequestSummary }>> {
+    const capabilityCode = resolveCapabilityCode(input);
     const idempotencyKey = ensureIdempotencyKey(input.idempotencyKey);
-    const preflight = await this.client.services.preflight({
+    const preflight = await this.client.capabilities.preflight({
       actorId: input.actorId,
-      serviceCode: input.serviceCode,
+      capabilityCode,
       input: input.input,
       approvalMode: input.approvalMode,
       budgetLimitAgo: input.budgetLimitAgo,
@@ -107,17 +117,17 @@ export class AgoraFlows {
           message: preflight.reason ?? 'Execution preflight requires additional action.',
           instructions: [
             'Inspect the preflight payload to decide whether to request approval or fund the wallet.',
-            'Do not execute the service until the pending requirement is satisfied.',
+            'Do not execute the capability until the pending requirement is satisfied.',
           ],
           context: {
-            serviceCode: input.serviceCode,
+            capabilityCode,
             preflight,
           },
           resumeToken: {
             kind: 'execution-preflight',
             createdAt: new Date().toISOString(),
             context: {
-              serviceCode: input.serviceCode,
+              capabilityCode,
               preflight,
               originalInput: input as unknown as Record<string, unknown>,
             },
@@ -135,22 +145,24 @@ export class AgoraFlows {
             type: 'approval_required',
             message: 'Execution requires human approval before side effects can continue.',
             instructions: [
-              'Create an approval request or surface this requirement to a human approver.',
+              'Create an approval request or surface this capability requirement to a human approver.',
               'Resume execution once the approval is approved.',
             ],
             context: {
-              serviceCode: input.serviceCode,
+              capabilityCode,
               preflight,
             },
             resumeToken: {
               kind: 'approval-required',
               createdAt: new Date().toISOString(),
               context: {
-                serviceCode: input.serviceCode,
+                capabilityCode,
                 originalInput: input as unknown as Record<string, unknown>,
               },
             },
-            recommendedPolling: input.polling ? { intervalMs: input.polling.intervalMs ?? 1000, timeoutMs: input.polling.timeoutMs } : undefined,
+            ...(input.polling
+              ? { recommendedPolling: { intervalMs: input.polling.intervalMs ?? 1000, timeoutMs: input.polling.timeoutMs } }
+              : {}),
           },
           meta: { idempotencyKey, route: '/api/external/preflight' },
         };
@@ -158,7 +170,7 @@ export class AgoraFlows {
 
       const approval = await this.client.approvals.request({
         actorId: input.actorId,
-        serviceCode: input.serviceCode,
+        capabilityCode,
         input: input.input,
         callbackUrl: input.callbackUrl,
         callbackSecret: input.callbackSecret,
@@ -178,6 +190,7 @@ export class AgoraFlows {
           ],
           context: {
             approvalId: String(approval.approvalId ?? approval.id),
+            capabilityCode,
             preflight,
           },
           resumeToken: {
@@ -185,6 +198,7 @@ export class AgoraFlows {
             createdAt: new Date().toISOString(),
             context: {
               approvalId: String(approval.approvalId ?? approval.id),
+              capabilityCode,
               originalInput: input as unknown as Record<string, unknown>,
             },
           },
@@ -194,7 +208,19 @@ export class AgoraFlows {
       };
     }
 
-    const execution = await this.client.executions.create({ ...input, idempotencyKey }, { idempotencyKey });
+    const execution = normalizeExecution(await this.client.executions.create({
+      actorId: input.actorId,
+      serviceCode: capabilityCode,
+      input: input.input,
+      approvalMode: input.approvalMode,
+      budgetLimitAgo: input.budgetLimitAgo,
+      correlationId: input.correlationId,
+      workflowContext: input.workflowContext,
+      callbackUrl: input.callbackUrl,
+      callbackSecret: input.callbackSecret,
+      requestedExecutionMode: input.requestedExecutionMode,
+      idempotencyKey,
+    }, { idempotencyKey }), capabilityCode);
     if (!input.wait) {
       return {
         ok: true,
@@ -204,7 +230,7 @@ export class AgoraFlows {
     }
 
     const executionId = String(execution.executionId ?? execution.id ?? '');
-    const settled = await this.client.executions.waitForCompletion(executionId, input.polling);
+    const settled = normalizeExecution(await this.client.executions.waitForCompletion(executionId, input.polling), capabilityCode);
     return {
       ok: true,
       data: { execution: settled },
@@ -212,11 +238,27 @@ export class AgoraFlows {
     };
   }
 
-  async requestApproval(input: ExecuteServiceFlowInput): Promise<FlowResult<ApprovalRequestSummary>> {
-    const preflight = await this.client.services.preflight(input);
+  /**
+   * @deprecated Use executeCapability instead.
+   */
+  async executeService(input: ExecuteServiceFlowInput): Promise<FlowResult<{ execution?: Execution; approval?: ApprovalRequestSummary }>> {
+    return this.executeCapability(input);
+  }
+
+  async requestApproval(input: ExecuteCapabilityFlowInput): Promise<FlowResult<ApprovalRequestSummary>> {
+    const capabilityCode = resolveCapabilityCode(input);
+    const preflight = await this.client.capabilities.preflight({
+      actorId: input.actorId,
+      capabilityCode,
+      input: input.input,
+      approvalMode: input.approvalMode,
+      budgetLimitAgo: input.budgetLimitAgo,
+      correlationId: input.correlationId,
+      workflowContext: input.workflowContext,
+    });
     const approval = await this.client.approvals.request({
       actorId: input.actorId,
-      serviceCode: input.serviceCode,
+      capabilityCode,
       input: input.input,
       callbackUrl: input.callbackUrl,
       callbackSecret: input.callbackSecret,

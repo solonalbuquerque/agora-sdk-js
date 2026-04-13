@@ -23,6 +23,9 @@ export class AgoraClient {
   readonly auth: AuthResource;
   readonly agents: AgentsResource;
   readonly capabilities: CapabilitiesResource;
+  /**
+   * @deprecated Use client.capabilities instead.
+   */
   readonly services: ServicesResource;
   readonly executions: ExecutionsResource;
   readonly workflows: WorkflowsResource;

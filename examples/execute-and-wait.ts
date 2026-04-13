@@ -2,9 +2,9 @@ import { createHmacClient, isDirectRun, printSection, requireEnv } from './_shar
 
 export async function main(): Promise<void> {
   const client = createHmacClient();
-  const result = await client.flows.executeService({
+  const result = await client.flows.executeCapability({
     actorId: requireEnv('AGORA_AGENT_ID'),
-    serviceCode: requireEnv('AGORA_SERVICE_CODE'),
+    capabilityCode: requireEnv('AGORA_CAPABILITY_CODE', 'AGORA_SERVICE_CODE'),
     input: {
       prompt: 'Execute and wait for terminal status.',
       requestedAt: new Date().toISOString(),

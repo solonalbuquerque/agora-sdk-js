@@ -4,7 +4,7 @@ Official JavaScript / TypeScript SDK for AGORA Instance.
 
 `agora-sdk-js` is a standalone, publishable SDK for AGORA Instance. It is Node-first, TypeScript-first, fetch-based, and designed to feel like a real developer product instead of a thin HTTP wrapper.
 
-The SDK covers AGORA Instance domains such as auth handling, agents, wallet, services, executions, inbox, leads, workflows, approvals, capabilities, and webhook utilities. It intentionally excludes AGORA CENTRAL-only treasury, registry, and global-settlement product flows.
+The SDK covers AGORA Instance domains such as auth handling, agents, wallet, capabilities, executions, inbox, leads, workflows, approvals, employers, and webhook utilities. It intentionally excludes AGORA CENTRAL-only treasury, registry, and global-settlement product flows.
 
 ## Install
 
@@ -23,7 +23,7 @@ const client = new AgoraClient({
 });
 
 const balance = await client.wallet.getBalance();
-const capabilities = await client.capabilities.get();
+const capabilities = await client.capabilities.discover();
 ```
 
 ## Auth Examples
@@ -66,12 +66,12 @@ const client = new AgoraClient({
 
 ## Common Resource Usage
 
-### Execute a service
+### Execute a capability
 
 ```ts
-const execution = await client.services.execute('svc.echo', {
+const execution = await client.capabilities.execute('svc.echo', {
   actorId: process.env.AGORA_AGENT_ID,
-  serviceCode: 'svc.echo',
+  capabilityCode: 'svc.echo',
   input: { prompt: 'hello' },
   idempotencyKey: 'exec-123',
 });
@@ -127,12 +127,12 @@ const result = await client.flows.onboardAgent({
 });
 ```
 
-### Safe execution with approval handling
+### Safe capability execution with approval handling
 
 ```ts
-const result = await client.flows.executeService({
+const result = await client.flows.executeCapability({
   actorId: process.env.AGORA_AGENT_ID,
-  serviceCode: 'svc.echo',
+  capabilityCode: 'svc.echo',
   input: { prompt: 'hello' },
   autoRequestApproval: true,
   wait: true,
@@ -152,6 +152,19 @@ const execution = await client.executions.waitForCompletion('exec-123', {
   timeoutMs: 60000,
 });
 ```
+
+## Capability Migration
+
+`capabilities` is the canonical public product surface.
+
+Deprecated compatibility aliases remain available:
+- `client.services`
+- `ServiceSummary`, `ServiceQuote`, `ServiceExecutionInput`
+- `ExecuteServiceFlowInput`
+- `client.flows.executeService()`
+- `serviceCode` request fields
+
+When both `capabilityCode` and `serviceCode` are provided, the SDK uses `capabilityCode`.
 
 ## Error Handling
 
@@ -202,7 +215,6 @@ await client.wallet.transfer({
 - `client.auth`
 - `client.agents`
 - `client.capabilities`
-- `client.services`
 - `client.executions`
 - `client.workflows`
 - `client.inbox`
@@ -213,23 +225,25 @@ await client.wallet.transfer({
 - `client.webhooks`
 - `client.flows`
 
+Deprecated alias:
+- `client.services`
+
 ## Current Coverage Notes
 
 Implemented because the Instance API supports them cleanly:
 - `agents.register`, `agents.verifyKey`, `agents.rotateKey`, `agents.me`
 - `wallet.getBalance`, `wallet.getStatement`, `wallet.getLedger`, `wallet.transfer`
-- `services.list`, `services.get`, `services.quote`, `services.execute`, `services.preflight`
+- `capabilities.discover`, `capabilities.list`, `capabilities.get`, `capabilities.quote`, `capabilities.execute`, `capabilities.preflight`
 - `executions.list`, `executions.get`, `executions.cancel`, `executions.waitForCompletion`
 - `inbox.create`, `inbox.ingestAndRun`, `inbox.get`, `inbox.list`, lead conversion helpers
 - `workflows.list`, `workflows.get`, `workflows.run`
 - `approvals.list`, `approvals.get`, `approvals.request`, `approvals.decide`, `approvals.approve`, `approvals.reject`
-- `capabilities.get` and `capabilities.list`
 
 Explicitly omitted for now because the provided spec does not expose a stable external route:
 - `agents.get(id)`
 - `agents.list()`
 - `workflows.cancel()`
-- `services.create()`
+- `capabilities.create()`
 
 ## Wallet Semantics
 
@@ -243,7 +257,7 @@ See `examples/` for practical scenarios:
 - discovery and auth
 - onboarding an agent
 - human-link handoff
-- safe service execution
+- safe capability execution
 - approval request and resume
 - execute and wait
 - transfer funds
